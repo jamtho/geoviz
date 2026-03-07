@@ -1,0 +1,39 @@
+build/
+out/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Vendored deps (downloaded, not committed unless desired)
+# Uncomment the next two lines if you don't want to commit vendored sources:
+# third_party/duckdb/
+# third_party/cjson/
+
+# Test data
+test_data.parquet
+vessel_tracks.parquet
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json

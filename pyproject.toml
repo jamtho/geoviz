@@ -1,0 +1,13 @@
+[project]
+name = "geoviz-scripts"
+version = "0.1.0"
+description = "Scripts for geoviz test data generation"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "pyarrow>=14.0",
+    "pytest>=7.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

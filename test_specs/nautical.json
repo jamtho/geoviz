@@ -1,0 +1,22 @@
+{
+  "data": { "uri": "vessel_tracks.parquet" },
+  "basemap": "nautical",
+  "layers": [
+    {
+      "mark": "line",
+      "encoding": {
+        "x": { "field": "lon" },
+        "y": { "field": "lat" },
+        "color": { "field": "sog", "scheme": "viridis" }
+      }
+    },
+    {
+      "mark": "point",
+      "encoding": {
+        "x": { "field": "lon" },
+        "y": { "field": "lat" },
+        "color": { "field": "sog", "scheme": "viridis" }
+      }
+    }
+  ]
+}

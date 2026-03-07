@@ -1,0 +1,14 @@
+{
+  "data": { "uri": "test_data.parquet" },
+  "basemap": "osm",
+  "layers": [
+    {
+      "mark": "point",
+      "encoding": {
+        "x": { "field": "lon" },
+        "y": { "field": "lat" },
+        "color": { "field": "speed", "scheme": "turbo" }
+      }
+    }
+  ]
+}
