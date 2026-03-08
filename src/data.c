@@ -112,6 +112,13 @@ int data_load(const Spec *spec, DataSet *out) {
         return -1;
     }
 
+    /* Enable auto-loading of extensions (parquet, httpfs, etc.) */
+    {
+        duckdb_result res;
+        duckdb_query(con, "SET autoinstall_known_extensions=1; SET autoload_known_extensions=1;", &res);
+        duckdb_destroy_result(&res);
+    }
+
     /* Install httpfs if S3 URI */
     if (strncmp(spec->data_uri, "s3://", 5) == 0) {
         duckdb_result res;
@@ -121,16 +128,41 @@ int data_load(const Spec *spec, DataSet *out) {
         duckdb_destroy_result(&res);
     }
 
+    /* Determine reader function based on file extension */
+    const char *uri = spec->data_uri;
+    const char *ext = strrchr(uri, '.');
+    const char *reader_prefix = "";
+    const char *reader_suffix = "";
+    if (ext && strcmp(ext, ".parquet") == 0) {
+        reader_prefix = "read_parquet('";
+        reader_suffix = "')";
+    } else if (ext && strcmp(ext, ".csv") == 0) {
+        reader_prefix = "read_csv('";
+        reader_suffix = "')";
+    }
+
     /* Build query */
     char query[2048];
-    if (color_field) {
-        snprintf(query, sizeof(query),
-                 "SELECT \"%s\", \"%s\", \"%s\" FROM '%s'",
-                 x_field, y_field, color_field, spec->data_uri);
+    if (reader_prefix[0]) {
+        if (color_field) {
+            snprintf(query, sizeof(query),
+                     "SELECT \"%s\", \"%s\", \"%s\" FROM %s%s%s",
+                     x_field, y_field, color_field, reader_prefix, uri, reader_suffix);
+        } else {
+            snprintf(query, sizeof(query),
+                     "SELECT \"%s\", \"%s\" FROM %s%s%s",
+                     x_field, y_field, reader_prefix, uri, reader_suffix);
+        }
     } else {
-        snprintf(query, sizeof(query),
-                 "SELECT \"%s\", \"%s\" FROM '%s'",
-                 x_field, y_field, spec->data_uri);
+        if (color_field) {
+            snprintf(query, sizeof(query),
+                     "SELECT \"%s\", \"%s\", \"%s\" FROM '%s'",
+                     x_field, y_field, color_field, uri);
+        } else {
+            snprintf(query, sizeof(query),
+                     "SELECT \"%s\", \"%s\" FROM '%s'",
+                     x_field, y_field, uri);
+        }
     }
 
     fprintf(stderr, "Executing query: %s\n", query);
