@@ -43,6 +43,15 @@ static inline void plot_pixel(int px, int py, Color c) {
     }
 }
 
+/* Plot a small square (2x2) for point visibility */
+static inline void plot_point(int px, int py, Color c) {
+    for (int dy = 0; dy <= 1; dy++) {
+        for (int dx = 0; dx <= 1; dx++) {
+            plot_pixel(px + dx, py + dy, c);
+        }
+    }
+}
+
 static void draw_line_bresenham(int x0, int y0, int x1, int y1, Color c) {
     int dx = abs(x1 - x0);
     int dy = -abs(y1 - y0);
@@ -99,7 +108,7 @@ void render_rasterise(const Spec *spec, const DataSet *ds,
                 } else {
                     c = default_point_color();
                 }
-                plot_pixel(px, py, c);
+                plot_point(px, py, c);
             }
         } else if (layer->mark == MARK_LINE) {
             int prev_px = 0, prev_py = 0;

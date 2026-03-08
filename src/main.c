@@ -71,6 +71,13 @@ int main(int argc, char *argv[]) {
     int h = GetScreenHeight();
     render_init(w, h);
 
+    /* Auto-screenshot support: --screenshot <path> saves after tiles load */
+    const char *screenshot_path = NULL;
+    if (argc >= 4 && strcmp(argv[2], "--screenshot") == 0) {
+        screenshot_path = argv[3];
+    }
+    int frame_count = 0;
+
     /* Initial rasterisation */
     int viewport_dirty = 1;
 
@@ -173,6 +180,13 @@ int main(int argc, char *argv[]) {
         DrawText(info, 10, 30, 16, GREEN);
 
         EndDrawing();
+
+        frame_count++;
+        if (screenshot_path && frame_count == 300) {
+            TakeScreenshot(screenshot_path);
+            fprintf(stderr, "Screenshot saved to %s\n", screenshot_path);
+            break;
+        }
     }
 
     /* Cleanup */

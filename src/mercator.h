@@ -69,17 +69,28 @@ static inline void world_to_tile(double lon, double lat, int z, int *tx, int *ty
     if (*ty >= max_tile) *ty = max_tile - 1;
 }
 
-/* Get the pixel offset of a tile's top-left corner on screen */
+/* Get the pixel offset of a tile's top-left corner on screen.
+ * Converts tile position from integer-zoom world space to viewport-zoom
+ * screen space so tiles align correctly at fractional zoom levels. */
 static inline void tile_screen_pos(int tx, int ty, int z, const Viewport *vp,
                                     int screen_width, int screen_height,
                                     double *sx, double *sy) {
-    double scale = pow(2.0, z) * 256.0;
-    double tile_world_x = tx * 256.0;
-    double tile_world_y = ty * 256.0;
-    double cam_x = lon_to_world_x(vp->center_lon, scale);
-    double cam_y = lat_to_world_y(vp->center_lat, scale);
-    *sx = tile_world_x - cam_x + screen_width / 2.0;
-    *sy = tile_world_y - cam_y + screen_height / 2.0;
+    /* Tile's top-left in normalised [0,1] world coordinates */
+    double n_tiles = pow(2.0, z);
+    double norm_x = (double)tx / n_tiles;
+    double norm_y = (double)ty / n_tiles;
+
+    /* Convert to viewport-zoom world pixels */
+    double vp_scale = mercator_scale(vp->zoom);
+    double world_x = norm_x * vp_scale;
+    double world_y = norm_y * vp_scale;
+
+    /* Camera position in viewport-zoom world pixels */
+    double cam_x = lon_to_world_x(vp->center_lon, vp_scale);
+    double cam_y = lat_to_world_y(vp->center_lat, vp_scale);
+
+    *sx = world_x - cam_x + screen_width / 2.0;
+    *sy = world_y - cam_y + screen_height / 2.0;
 }
 
 #endif /* MERCATOR_H */

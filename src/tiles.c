@@ -413,9 +413,10 @@ static void render_source_tiles(const Viewport *vp, TileSource src, int screen_w
                 double sx, sy;
                 tile_screen_pos(tx, ty, z, vp, screen_width, screen_height, &sx, &sy);
 
-                /* Scale tile to account for fractional zoom */
+                /* Scale tile to account for fractional zoom.
+                 * Add 1px overlap to prevent gaps from float rounding. */
                 double tile_scale = mercator_scale(vp->zoom) / mercator_scale(z);
-                float draw_size = (float)(256.0 * tile_scale);
+                float draw_size = (float)(256.0 * tile_scale) + 1.0f;
 
                 Rectangle src_rect = {0, 0, (float)ct->texture.width, (float)ct->texture.height};
                 Rectangle dst_rect = {(float)sx, (float)sy, draw_size, draw_size};
