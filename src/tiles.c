@@ -1,3 +1,26 @@
+#ifdef _WIN32
+/* Must come before raylib.h to avoid Windows API name clashes */
+#define NOGDI
+#define NOUSER
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <direct.h>
+#undef NOGDI
+#undef NOUSER
+#define mkdir_p(path) _mkdir(path)
+#define atomic_int volatile LONG
+#define atomic_store(p, v) InterlockedExchange((p), (v))
+#define atomic_load(p) InterlockedCompareExchange((p), 0, 0)
+#define atomic_fetch_add(p, v) InterlockedExchangeAdd((p), (v))
+#define atomic_fetch_sub(p, v) InterlockedExchangeAdd((p), -(v))
+#else
+#include <pthread.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <stdatomic.h>
+#define mkdir_p(path) mkdir(path, 0755)
+#endif
+
 #include "tiles.h"
 #include "http.h"
 #include "mercator.h"
@@ -5,19 +28,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-
-#ifdef _WIN32
-#include <windows.h>
-#include <direct.h>
-#define mkdir_p(path) _mkdir(path)
-#else
-#include <pthread.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#define mkdir_p(path) mkdir(path, 0755)
-#endif
-
-#include <stdatomic.h>
 
 /* ---------- Tile source URLs ---------- */
 

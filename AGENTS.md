@@ -25,3 +25,5 @@
 - **Git commit frequently** — after each logical unit of work
 - Write clear, concise commit messages describing *why*, not just *what*
 - Keep commits atomic: one concern per commit
+- Write commit messages like a human would — no "Co-Authored-By" or AI attribution lines
+- No generated boilerplate in commit messages
