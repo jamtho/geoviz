@@ -43,10 +43,11 @@ static inline void plot_pixel(int px, int py, Color c) {
     }
 }
 
-/* Plot a small square (2x2) for point visibility */
-static inline void plot_point(int px, int py, Color c) {
-    for (int dy = 0; dy <= 1; dy++) {
-        for (int dx = 0; dx <= 1; dx++) {
+/* Plot a square of given size centered on (px, py) */
+static inline void plot_point(int px, int py, int size, Color c) {
+    int half = size / 2;
+    for (int dy = -half; dy < size - half; dy++) {
+        for (int dx = -half; dx < size - half; dx++) {
             plot_pixel(px + dx, py + dy, c);
         }
     }
@@ -97,6 +98,7 @@ void render_rasterise(const Spec *spec, const DataSet *ds,
         bool has_color = layer->encoding.has_color && ds->color_values != NULL;
 
         if (layer->mark == MARK_POINT) {
+            int pt_size = layer->encoding.point_size;
             for (uint32_t i = 0; i < ds->count; i++) {
                 int px = (int)lon_to_pixel(ds->x[i], vp, width);
                 int py = (int)lat_to_pixel(ds->y[i], vp, height);
@@ -108,7 +110,7 @@ void render_rasterise(const Spec *spec, const DataSet *ds,
                 } else {
                     c = default_point_color();
                 }
-                plot_point(px, py, c);
+                plot_point(px, py, pt_size, c);
             }
         } else if (layer->mark == MARK_LINE) {
             int prev_px = 0, prev_py = 0;

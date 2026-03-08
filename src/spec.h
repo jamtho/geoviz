@@ -24,6 +24,7 @@ typedef struct {
     bool has_color;
     char color_field[256];
     ColormapType color_scheme;
+    int point_size;  /* Diameter in pixels (default 6) */
 } Encoding;
 
 typedef struct {

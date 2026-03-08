@@ -124,6 +124,10 @@ int spec_parse(const char *filepath, Spec *out) {
         strncpy(l->encoding.x_field, x_field->valuestring, sizeof(l->encoding.x_field) - 1);
         strncpy(l->encoding.y_field, y_field->valuestring, sizeof(l->encoding.y_field) - 1);
 
+        /* point_size (optional, default 6) */
+        cJSON *ps = cJSON_GetObjectItemCaseSensitive(enc, "point_size");
+        l->encoding.point_size = (ps && cJSON_IsNumber(ps) && ps->valueint > 0) ? ps->valueint : 6;
+
         cJSON *color = cJSON_GetObjectItemCaseSensitive(enc, "color");
         if (color && cJSON_IsObject(color)) {
             cJSON *cf = cJSON_GetObjectItemCaseSensitive(color, "field");
