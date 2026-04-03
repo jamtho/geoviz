@@ -6,6 +6,7 @@
 #include "raylib.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 
 #define WINDOW_WIDTH 1280
@@ -13,30 +14,77 @@
 #define ZOOM_MIN 2.0
 #define ZOOM_MAX 20.0
 
+static char *read_stdin(void) {
+    size_t cap = 4096;
+    size_t len = 0;
+    char *buf = (char *)malloc(cap);
+    if (!buf) return NULL;
+
+    size_t n;
+    while ((n = fread(buf + len, 1, cap - len - 1, stdin)) > 0) {
+        len += n;
+        if (len + 1 >= cap) {
+            cap *= 2;
+            char *tmp = (char *)realloc(buf, cap);
+            if (!tmp) { free(buf); return NULL; }
+            buf = tmp;
+        }
+    }
+    buf[len] = '\0';
+    return buf;
+}
+
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: geoviz <spec.json>\n");
-        return 1;
+    const char *spec_file = NULL;
+    const char *screenshot_path = NULL;
+
+    /* Parse arguments */
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
+            screenshot_path = argv[++i];
+        } else if (!spec_file) {
+            spec_file = argv[i];
+        } else {
+            fprintf(stderr, "Usage: geoviz [spec.json] [--screenshot path]\n");
+            return 1;
+        }
     }
 
-    /* Parse spec */
+    /* Parse spec from file or stdin */
     Spec spec;
-    if (spec_parse(argv[1], &spec) != 0) {
-        return 1;
+    if (spec_file) {
+        if (spec_parse(spec_file, &spec) != 0) {
+            return 1;
+        }
+    } else {
+        char *json = read_stdin();
+        if (!json || json[0] == '\0') {
+            fprintf(stderr, "Usage: geoviz [spec.json] [--screenshot path]\n");
+            fprintf(stderr, "       Or pipe spec JSON to stdin\n");
+            free(json);
+            return 1;
+        }
+        if (spec_parse_string(json, &spec) != 0) {
+            free(json);
+            return 1;
+        }
+        free(json);
     }
 
-    fprintf(stderr, "Spec parsed: %d layers, basemap=%d, data='%s'\n",
-            spec.layer_count, spec.basemap, spec.data_uri);
+    fprintf(stderr, "Spec parsed: %d layers, basemap=%d\n",
+            spec.layer_count, spec.basemap);
 
     /* Load data */
     DataSet ds;
-    if (data_load(&spec, &ds) != 0) {
+    if (data_load(spec.sql, &ds) != 0) {
         fprintf(stderr, "Error: failed to load data\n");
+        spec_free(&spec);
         return 1;
     }
 
     if (ds.count == 0) {
         fprintf(stderr, "Error: no data rows loaded\n");
+        spec_free(&spec);
         return 1;
     }
 
@@ -71,11 +119,6 @@ int main(int argc, char *argv[]) {
     int h = GetScreenHeight();
     render_init(w, h);
 
-    /* Auto-screenshot support: --screenshot <path> saves after tiles load */
-    const char *screenshot_path = NULL;
-    if (argc >= 4 && strcmp(argv[2], "--screenshot") == 0) {
-        screenshot_path = argv[3];
-    }
     int frame_count = 0;
 
     /* Initial rasterisation */
@@ -193,6 +236,7 @@ int main(int argc, char *argv[]) {
     render_shutdown();
     tiles_shutdown();
     data_free(&ds);
+    spec_free(&spec);
     CloseWindow();
 
     return 0;

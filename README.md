@@ -1,41 +1,73 @@
 # geoviz
 
-Native, high-performance geospatial data visualization. Renders large-scale (10M+ row) datasets onto slippy maps with pan/zoom. Reads a small JSON spec file and a data source (parquet, CSV), opens an interactive window.
+Native, high-performance geospatial data visualization. Renders large-scale (10M+ row) datasets onto slippy maps with pan/zoom. Reads a small JSON spec and executes a SQL query via DuckDB, then opens an interactive window.
 
-Single statically-linked binary. Built with DuckDB (data loading), raylib (rendering), and cJSON (spec parsing).
+Single statically-linked binary. Built with DuckDB (data loading + computation), raylib (rendering), and cJSON (spec parsing).
 
 Designed primarily as a tool for AI agents doing data analysis — an agent writes a small JSON spec and calls `geoviz` to get an interactive map visualization without needing a browser, notebook, or Python plotting stack.
 
 ## Examples
 
 ```bash
-# Visualise points colored by speed on an OSM basemap
+# Visualise points from a parquet file
 geoviz spec.json
 
-# Where spec.json contains:
-# {
-#   "data": { "uri": "traffic.parquet" },
-#   "basemap": "osm",
-#   "layers": [{
-#     "mark": "point",
-#     "encoding": {
-#       "x": { "field": "lon" },
-#       "y": { "field": "lat" },
-#       "color": { "field": "speed", "scheme": "turbo" }
-#     }
-#   }]
-# }
+# Pipe spec from stdin (useful for agents)
+echo '{"sql":"SELECT lon AS x, lat AS y FROM read_parquet(\"data.parquet\")","basemap":"osm","layers":[{"mark":"point"}]}' | geoviz
 
-# Draw vessel tracks as lines on a nautical chart
-geoviz nautical_tracks.json
-
-# Load data directly from S3-compatible storage (via DuckDB)
-# Just set the data.uri in your spec to an s3:// path:
-# { "data": { "uri": "s3://enron-emails/geo/locations.parquet" }, ... }
-
-# Save a screenshot instead of staying interactive
+# Save a screenshot
 geoviz spec.json --screenshot output.png
+
+# Compute and visualise in one step — no intermediate files needed
+cat <<'EOF' | geoviz
+{
+  "sql": "SELECT lon AS x, lat AS y, speed AS color FROM read_parquet('traffic.parquet') WHERE speed > 5",
+  "basemap": "osm",
+  "layers": [{ "mark": "point", "scheme": "turbo" }]
+}
+EOF
+
+# Query S3-compatible storage directly
+cat <<'EOF' | geoviz
+{
+  "sql": "SELECT lon AS x, lat AS y, sog AS color FROM read_parquet('s3://bucket/tracks.parquet')",
+  "basemap": "nautical",
+  "layers": [{ "mark": "line", "scheme": "viridis" }]
+}
+EOF
 ```
+
+## Spec format
+
+```json
+{
+  "sql": "SELECT lon AS x, lat AS y, speed AS color FROM read_parquet('data.parquet')",
+  "basemap": "osm",
+  "layers": [
+    { "mark": "point", "scheme": "turbo", "point_size": 6 }
+  ]
+}
+```
+
+- **sql**: Any DuckDB SQL query. Must produce columns named `x` and `y`. An optional `color` column controls per-point coloring.
+- **basemap**: `"osm"`, `"satellite"`, `"nautical"`, or `"none"`
+- **mark**: `"point"` (filled square per row) or `"line"` (Bresenham between consecutive rows)
+- **scheme**: `"viridis"`, `"inferno"`, `"plasma"`, or `"turbo"`
+- **point_size**: Diameter in pixels (default 6)
+
+## Usage
+
+```
+geoviz [spec.json] [--screenshot path]
+```
+
+- With a file argument: reads spec from that file
+- Without arguments: reads spec from stdin
+
+## Controls
+
+- **Pan**: left-click drag
+- **Zoom**: scroll wheel (zooms toward cursor)
 
 ## Quick start
 
@@ -54,35 +86,6 @@ uv run python scripts/gen_test_data.py
 build/Release/geoviz test_specs/points.json
 ```
 
-## Spec format
-
-```json
-{
-  "data": { "uri": "traffic.parquet" },
-  "basemap": "osm",
-  "layers": [
-    {
-      "mark": "point",
-      "encoding": {
-        "x": { "field": "lon" },
-        "y": { "field": "lat" },
-        "color": { "field": "sog", "scheme": "viridis" }
-      }
-    }
-  ]
-}
-```
-
-- **data.uri**: Path to parquet or CSV (also supports `s3://` via DuckDB)
-- **basemap**: `"osm"`, `"satellite"`, `"nautical"`, or `"none"`
-- **mark**: `"point"` (single pixel per row) or `"line"` (Bresenham between consecutive rows)
-- **color.scheme**: `"viridis"`, `"inferno"`, `"plasma"`, or `"turbo"`
-
-## Controls
-
-- **Pan**: left-click drag
-- **Zoom**: scroll wheel (zooms toward cursor)
-
 ## Tests
 
 ### C tests (via CTest)
@@ -96,20 +99,14 @@ cd build && ctest -C Release --output-on-failure
 |------|-------|----------|
 | `test_colormap` | 6 | LUT lookup, name parsing, clamping, endpoints, distinct entries |
 | `test_mercator` | 10 | lon/lat-to-pixel roundtrips, tile coordinate mapping, zoom levels 2-18 |
-| `test_spec` | 10 | Valid specs (minimal, full, all basemaps), error rejection (missing data/layers/encoding, invalid JSON, missing file) |
-| `test_data` | 11 | CSV and parquet loading, no-color mode, integer type coercion, 10k row stress test, extent computation, missing file/column errors, negative values, uniform color, data_free safety |
+| `test_spec` | 11 | Valid specs (minimal, full, all basemaps, string parsing), error rejection (missing sql/layers/mark, invalid JSON, missing file) |
+| `test_data` | 13 | CSV and parquet loading, column aliases, inline SQL, integer type coercion, 10k row stress test, extent computation, missing columns, bad SQL, negative values, uniform color, data_free safety |
 
 ### Python tests (via pytest)
 
 ```bash
 uv run pytest tests/ -v
 ```
-
-| Test class | Cases | Coverage |
-|------------|-------|----------|
-| `TestChannelData` | 9 | Row count, column names, lon/lat/speed ranges, deterministic seeding, custom ranges, dtypes |
-| `TestTrackData` | 4 | Row count, columns, non-negative SOG, deterministic output |
-| `TestSpecFiles` | 3 | JSON validity of all example spec files |
 
 ### Test fixtures
 
@@ -123,9 +120,9 @@ uv run python tests/gen_test_fixture.py
 
 ```
 src/
-  main.c           Entry point, main loop, pan/zoom input
-  spec.c/h         JSON spec parsing
-  data.c/h         DuckDB chunk-based data loading
+  main.c           Entry point, main loop, pan/zoom input, stdin/file spec reading
+  spec.c/h         JSON spec parsing (from file or string)
+  data.c/h         DuckDB SQL execution and result loading
   tiles.c/h        Async tile fetching with disk cache
   render.c/h       CPU rasterisation to overlay texture
   colormap.c/h     viridis/inferno/plasma/turbo 256-entry LUTs

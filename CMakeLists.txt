@@ -94,7 +94,7 @@ target_link_libraries(test_spec PRIVATE cjson)
 add_test(NAME test_spec COMMAND test_spec)
 
 # Test: data loading (requires DuckDB)
-add_executable(test_data tests/test_data.c src/data.c src/colormap.c)
+add_executable(test_data tests/test_data.c src/data.c)
 target_include_directories(test_data PRIVATE src)
 target_link_libraries(test_data PRIVATE duckdb)
 if(WIN32)

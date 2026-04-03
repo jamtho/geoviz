@@ -2,7 +2,6 @@
 #define SPEC_H
 
 #include "colormap.h"
-#include <stdbool.h>
 
 #define MAX_LAYERS 16
 
@@ -19,27 +18,25 @@ typedef enum {
 } MarkType;
 
 typedef struct {
-    char x_field[256];
-    char y_field[256];
-    bool has_color;
-    char color_field[256];
-    ColormapType color_scheme;
-    int point_size;  /* Diameter in pixels (default 6) */
-} Encoding;
-
-typedef struct {
     MarkType mark;
-    Encoding encoding;
+    ColormapType scheme;
+    int point_size;  /* Diameter in pixels (default 6) */
 } Layer;
 
 typedef struct {
-    char data_uri[1024];
+    char *sql;       /* Dynamically allocated SQL query */
     BasemapType basemap;
     Layer layers[MAX_LAYERS];
     int layer_count;
 } Spec;
 
-/* Parse a spec JSON file. Returns 0 on success, -1 on error (prints to stderr). */
+/* Parse a spec from a JSON string. Returns 0 on success, -1 on error. */
+int spec_parse_string(const char *json, Spec *out);
+
+/* Parse a spec JSON file. Returns 0 on success, -1 on error. */
 int spec_parse(const char *filepath, Spec *out);
+
+/* Free dynamically allocated spec fields */
+void spec_free(Spec *spec);
 
 #endif /* SPEC_H */

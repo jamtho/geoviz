@@ -6,6 +6,39 @@
 #include <float.h>
 #include <math.h>
 
+/* For DECIMAL columns, wrap the user query to cast to DOUBLE */
+static char *wrap_decimal_casts(const char *sql, duckdb_result *result) {
+    /* Check if any column is DECIMAL */
+    idx_t col_count = duckdb_column_count(result);
+    int has_decimal = 0;
+    for (idx_t i = 0; i < col_count; i++) {
+        if (duckdb_column_type(result, i) == DUCKDB_TYPE_DECIMAL) {
+            has_decimal = 1;
+            break;
+        }
+    }
+    if (!has_decimal) return NULL;
+
+    /* Build: SELECT CAST(x AS DOUBLE) AS x, ... FROM (<original sql>) AS _t */
+    size_t buf_size = strlen(sql) + col_count * 64 + 128;
+    char *buf = (char *)malloc(buf_size);
+    if (!buf) return NULL;
+
+    size_t pos = 0;
+    pos += snprintf(buf + pos, buf_size - pos, "SELECT ");
+    for (idx_t i = 0; i < col_count; i++) {
+        const char *name = duckdb_column_name(result, i);
+        if (i > 0) pos += snprintf(buf + pos, buf_size - pos, ", ");
+        if (duckdb_column_type(result, i) == DUCKDB_TYPE_DECIMAL) {
+            pos += snprintf(buf + pos, buf_size - pos, "CAST(\"%s\" AS DOUBLE) AS \"%s\"", name, name);
+        } else {
+            pos += snprintf(buf + pos, buf_size - pos, "\"%s\"", name);
+        }
+    }
+    pos += snprintf(buf + pos, buf_size - pos, " FROM (%s) AS _t", sql);
+    return buf;
+}
+
 static double get_double_from_vector(duckdb_vector vec, duckdb_type col_type, uint64_t row) {
     switch (col_type) {
         case DUCKDB_TYPE_FLOAT: {
@@ -76,28 +109,20 @@ static int is_numeric_type(duckdb_type t) {
     }
 }
 
-int data_load(const Spec *spec, DataSet *out) {
-    memset(out, 0, sizeof(DataSet));
-
-    /* Find the first layer's encoding to determine columns to query.
-       All layers reference the same data source, so we collect the union of fields. */
-    const char *x_field = NULL;
-    const char *y_field = NULL;
-    const char *color_field = NULL;
-
-    for (int i = 0; i < spec->layer_count; i++) {
-        const Layer *l = &spec->layers[i];
-        if (!x_field) x_field = l->encoding.x_field;
-        if (!y_field) y_field = l->encoding.y_field;
-        if (!color_field && l->encoding.has_color) {
-            color_field = l->encoding.color_field;
+/* Find a column index by name. Returns -1 if not found. */
+static int find_column(duckdb_result *result, const char *name) {
+    idx_t col_count = duckdb_column_count(result);
+    for (idx_t i = 0; i < col_count; i++) {
+        const char *col_name = duckdb_column_name(result, i);
+        if (col_name && strcmp(col_name, name) == 0) {
+            return (int)i;
         }
     }
+    return -1;
+}
 
-    if (!x_field || !y_field) {
-        fprintf(stderr, "Error: no x/y fields found in spec layers\n");
-        return -1;
-    }
+int data_load(const char *sql, DataSet *out) {
+    memset(out, 0, sizeof(DataSet));
 
     duckdb_database db;
     duckdb_connection con;
@@ -119,8 +144,8 @@ int data_load(const Spec *spec, DataSet *out) {
         duckdb_destroy_result(&res);
     }
 
-    /* Install httpfs if S3 URI */
-    if (strncmp(spec->data_uri, "s3://", 5) == 0) {
+    /* Install httpfs if SQL references S3 */
+    if (strstr(sql, "s3://") || strstr(sql, "S3://")) {
         duckdb_result res;
         if (duckdb_query(con, "INSTALL httpfs; LOAD httpfs;", &res) != DuckDBSuccess) {
             fprintf(stderr, "Warning: failed to load httpfs extension\n");
@@ -128,47 +153,10 @@ int data_load(const Spec *spec, DataSet *out) {
         duckdb_destroy_result(&res);
     }
 
-    /* Determine reader function based on file extension */
-    const char *uri = spec->data_uri;
-    const char *ext = strrchr(uri, '.');
-    const char *reader_prefix = "";
-    const char *reader_suffix = "";
-    if (ext && strcmp(ext, ".parquet") == 0) {
-        reader_prefix = "read_parquet('";
-        reader_suffix = "')";
-    } else if (ext && strcmp(ext, ".csv") == 0) {
-        reader_prefix = "read_csv('";
-        reader_suffix = "')";
-    }
-
-    /* Build query */
-    char query[2048];
-    if (reader_prefix[0]) {
-        if (color_field) {
-            snprintf(query, sizeof(query),
-                     "SELECT \"%s\", \"%s\", \"%s\" FROM %s%s%s",
-                     x_field, y_field, color_field, reader_prefix, uri, reader_suffix);
-        } else {
-            snprintf(query, sizeof(query),
-                     "SELECT \"%s\", \"%s\" FROM %s%s%s",
-                     x_field, y_field, reader_prefix, uri, reader_suffix);
-        }
-    } else {
-        if (color_field) {
-            snprintf(query, sizeof(query),
-                     "SELECT \"%s\", \"%s\", \"%s\" FROM '%s'",
-                     x_field, y_field, color_field, uri);
-        } else {
-            snprintf(query, sizeof(query),
-                     "SELECT \"%s\", \"%s\" FROM '%s'",
-                     x_field, y_field, uri);
-        }
-    }
-
-    fprintf(stderr, "Executing query: %s\n", query);
+    fprintf(stderr, "Executing query: %s\n", sql);
 
     duckdb_result result;
-    if (duckdb_query(con, query, &result) != DuckDBSuccess) {
+    if (duckdb_query(con, sql, &result) != DuckDBSuccess) {
         const char *err = duckdb_result_error(&result);
         fprintf(stderr, "Error: DuckDB query failed: %s\n", err ? err : "unknown error");
         duckdb_destroy_result(&result);
@@ -177,28 +165,57 @@ int data_load(const Spec *spec, DataSet *out) {
         return -1;
     }
 
-    /* Validate column types */
-    idx_t col_count = duckdb_column_count(&result);
-    int expected_cols = color_field ? 3 : 2;
-    if ((int)col_count < expected_cols) {
-        fprintf(stderr, "Error: query returned %llu columns, expected %d\n",
-                (unsigned long long)col_count, expected_cols);
+    /* If any columns are DECIMAL, re-run with casts to DOUBLE */
+    char *wrapped = wrap_decimal_casts(sql, &result);
+    if (wrapped) {
+        duckdb_destroy_result(&result);
+        fprintf(stderr, "Re-executing with DECIMAL casts: %s\n", wrapped);
+        if (duckdb_query(con, wrapped, &result) != DuckDBSuccess) {
+            const char *err = duckdb_result_error(&result);
+            fprintf(stderr, "Error: DuckDB query failed: %s\n", err ? err : "unknown error");
+            free(wrapped);
+            duckdb_destroy_result(&result);
+            duckdb_disconnect(&con);
+            duckdb_close(&db);
+            return -1;
+        }
+        free(wrapped);
+    }
+
+    /* Find columns by name */
+    int x_col = find_column(&result, "x");
+    int y_col = find_column(&result, "y");
+    int color_col = find_column(&result, "color");
+
+    if (x_col < 0 || y_col < 0) {
+        fprintf(stderr, "Error: query result must have columns named 'x' and 'y'\n");
         duckdb_destroy_result(&result);
         duckdb_disconnect(&con);
         duckdb_close(&db);
         return -1;
     }
 
-    for (int c = 0; c < expected_cols; c++) {
-        duckdb_type t = duckdb_column_type(&result, c);
-        if (!is_numeric_type(t)) {
-            fprintf(stderr, "Error: column %d is not numeric (type=%d)\n", c, (int)t);
-            duckdb_destroy_result(&result);
-            duckdb_disconnect(&con);
-            duckdb_close(&db);
-            return -1;
-        }
+    /* Validate column types */
+    if (!is_numeric_type(duckdb_column_type(&result, x_col))) {
+        fprintf(stderr, "Error: column 'x' is not numeric\n");
+        duckdb_destroy_result(&result);
+        duckdb_disconnect(&con);
+        duckdb_close(&db);
+        return -1;
     }
+    if (!is_numeric_type(duckdb_column_type(&result, y_col))) {
+        fprintf(stderr, "Error: column 'y' is not numeric\n");
+        duckdb_destroy_result(&result);
+        duckdb_disconnect(&con);
+        duckdb_close(&db);
+        return -1;
+    }
+    if (color_col >= 0 && !is_numeric_type(duckdb_column_type(&result, color_col))) {
+        fprintf(stderr, "Warning: column 'color' is not numeric, ignoring\n");
+        color_col = -1;
+    }
+
+    out->has_color = (color_col >= 0);
 
     /* Count total rows via chunks */
     uint64_t total_rows = 0;
@@ -222,11 +239,11 @@ int data_load(const Spec *spec, DataSet *out) {
     /* Allocate arrays */
     out->x = (float *)malloc(total_rows * sizeof(float));
     out->y = (float *)malloc(total_rows * sizeof(float));
-    if (color_field) {
+    if (out->has_color) {
         out->color_values = (float *)malloc(total_rows * sizeof(float));
     }
 
-    if (!out->x || !out->y || (color_field && !out->color_values)) {
+    if (!out->x || !out->y || (out->has_color && !out->color_values)) {
         fprintf(stderr, "Error: failed to allocate memory for %llu rows\n",
                 (unsigned long long)total_rows);
         data_free(out);
@@ -242,24 +259,23 @@ int data_load(const Spec *spec, DataSet *out) {
     float c_min = FLT_MAX, c_max = -FLT_MAX;
     uint64_t row_offset = 0;
 
-    duckdb_type x_type = duckdb_column_type(&result, 0);
-    duckdb_type y_type = duckdb_column_type(&result, 1);
-    duckdb_type c_type = color_field ? duckdb_column_type(&result, 2) : DUCKDB_TYPE_FLOAT;
+    duckdb_type x_type = duckdb_column_type(&result, x_col);
+    duckdb_type y_type = duckdb_column_type(&result, y_col);
+    duckdb_type c_type = out->has_color ? duckdb_column_type(&result, color_col) : DUCKDB_TYPE_FLOAT;
 
     for (idx_t ci = 0; ci < chunk_count; ci++) {
         duckdb_data_chunk chunk = duckdb_result_get_chunk(result, ci);
         idx_t chunk_size = duckdb_data_chunk_get_size(chunk);
 
-        duckdb_vector x_vec = duckdb_data_chunk_get_vector(chunk, 0);
-        duckdb_vector y_vec = duckdb_data_chunk_get_vector(chunk, 1);
-        duckdb_vector c_vec = color_field ? duckdb_data_chunk_get_vector(chunk, 2) : NULL;
+        duckdb_vector x_vec = duckdb_data_chunk_get_vector(chunk, x_col);
+        duckdb_vector y_vec = duckdb_data_chunk_get_vector(chunk, y_col);
+        duckdb_vector c_vec = out->has_color ? duckdb_data_chunk_get_vector(chunk, color_col) : NULL;
 
         uint64_t *x_validity = duckdb_vector_get_validity(x_vec);
         uint64_t *y_validity = duckdb_vector_get_validity(y_vec);
         uint64_t *c_validity = c_vec ? duckdb_vector_get_validity(c_vec) : NULL;
 
         for (idx_t r = 0; r < chunk_size; r++) {
-            /* Check validity (NULL handling) */
             int x_valid = !x_validity || duckdb_validity_row_is_valid(x_validity, r);
             int y_valid = !y_validity || duckdb_validity_row_is_valid(y_validity, r);
 
@@ -274,7 +290,7 @@ int data_load(const Spec *spec, DataSet *out) {
             if (yv < y_min) y_min = yv;
             if (yv > y_max) y_max = yv;
 
-            if (color_field && c_vec) {
+            if (out->has_color && c_vec) {
                 int c_valid = !c_validity || duckdb_validity_row_is_valid(c_validity, r);
                 float cv = c_valid ? (float)get_double_from_vector(c_vec, c_type, r) : 0.0f;
                 out->color_values[row_offset + r] = cv;

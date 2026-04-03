@@ -18,147 +18,129 @@ static int write_and_parse(const char *json, Spec *out) {
 static void test_minimal_spec(void) {
     const char *json =
         "{"
-        "  \"data\": { \"uri\": \"test.parquet\" },"
+        "  \"sql\": \"SELECT lon AS x, lat AS y FROM read_parquet('test.parquet')\","
         "  \"layers\": ["
-        "    {"
-        "      \"mark\": \"point\","
-        "      \"encoding\": {"
-        "        \"x\": { \"field\": \"lon\" },"
-        "        \"y\": { \"field\": \"lat\" }"
-        "      }"
-        "    }"
+        "    { \"mark\": \"point\" }"
         "  ]"
         "}";
 
     Spec spec;
     assert(write_and_parse(json, &spec) == 0);
-    assert(strcmp(spec.data_uri, "test.parquet") == 0);
+    assert(strcmp(spec.sql, "SELECT lon AS x, lat AS y FROM read_parquet('test.parquet')") == 0);
     assert(spec.basemap == BASEMAP_OSM); /* default */
     assert(spec.layer_count == 1);
     assert(spec.layers[0].mark == MARK_POINT);
-    assert(strcmp(spec.layers[0].encoding.x_field, "lon") == 0);
-    assert(strcmp(spec.layers[0].encoding.y_field, "lat") == 0);
-    assert(spec.layers[0].encoding.has_color == false);
+    assert(spec.layers[0].scheme == COLORMAP_VIRIDIS); /* default */
+    assert(spec.layers[0].point_size == 6); /* default */
+    spec_free(&spec);
     printf("  PASS: minimal spec\n");
 }
 
 static void test_full_spec(void) {
     const char *json =
         "{"
-        "  \"data\": { \"uri\": \"s3://bucket/data.parquet\" },"
+        "  \"sql\": \"SELECT longitude AS x, latitude AS y, speed AS color FROM read_parquet('s3://bucket/data.parquet')\","
         "  \"basemap\": \"satellite\","
         "  \"layers\": ["
-        "    {"
-        "      \"mark\": \"line\","
-        "      \"encoding\": {"
-        "        \"x\": { \"field\": \"longitude\" },"
-        "        \"y\": { \"field\": \"latitude\" },"
-        "        \"color\": { \"field\": \"speed\", \"scheme\": \"turbo\" }"
-        "      }"
-        "    },"
-        "    {"
-        "      \"mark\": \"point\","
-        "      \"encoding\": {"
-        "        \"x\": { \"field\": \"longitude\" },"
-        "        \"y\": { \"field\": \"latitude\" },"
-        "        \"color\": { \"field\": \"speed\", \"scheme\": \"inferno\" }"
-        "      }"
-        "    }"
+        "    { \"mark\": \"line\", \"scheme\": \"turbo\" },"
+        "    { \"mark\": \"point\", \"scheme\": \"inferno\", \"point_size\": 3 }"
         "  ]"
         "}";
 
     Spec spec;
     assert(write_and_parse(json, &spec) == 0);
-    assert(strcmp(spec.data_uri, "s3://bucket/data.parquet") == 0);
+    assert(strstr(spec.sql, "s3://bucket/data.parquet") != NULL);
     assert(spec.basemap == BASEMAP_SATELLITE);
     assert(spec.layer_count == 2);
     assert(spec.layers[0].mark == MARK_LINE);
-    assert(strcmp(spec.layers[0].encoding.x_field, "longitude") == 0);
-    assert(spec.layers[0].encoding.has_color == true);
-    assert(strcmp(spec.layers[0].encoding.color_field, "speed") == 0);
-    assert(spec.layers[0].encoding.color_scheme == COLORMAP_TURBO);
+    assert(spec.layers[0].scheme == COLORMAP_TURBO);
     assert(spec.layers[1].mark == MARK_POINT);
-    assert(spec.layers[1].encoding.color_scheme == COLORMAP_INFERNO);
+    assert(spec.layers[1].scheme == COLORMAP_INFERNO);
+    assert(spec.layers[1].point_size == 3);
+    spec_free(&spec);
     printf("  PASS: full spec\n");
 }
 
 static void test_nautical_basemap(void) {
     const char *json =
         "{"
-        "  \"data\": { \"uri\": \"x.csv\" },"
+        "  \"sql\": \"SELECT 1 AS x, 2 AS y\","
         "  \"basemap\": \"nautical\","
-        "  \"layers\": ["
-        "    { \"mark\": \"point\", \"encoding\": {"
-        "      \"x\": { \"field\": \"x\" }, \"y\": { \"field\": \"y\" }"
-        "    }}"
-        "  ]"
+        "  \"layers\": [{ \"mark\": \"point\" }]"
         "}";
 
     Spec spec;
     assert(write_and_parse(json, &spec) == 0);
     assert(spec.basemap == BASEMAP_NAUTICAL);
+    spec_free(&spec);
     printf("  PASS: nautical basemap\n");
 }
 
 static void test_none_basemap(void) {
     const char *json =
         "{"
-        "  \"data\": { \"uri\": \"x.csv\" },"
+        "  \"sql\": \"SELECT 1 AS x, 2 AS y\","
         "  \"basemap\": \"none\","
-        "  \"layers\": ["
-        "    { \"mark\": \"point\", \"encoding\": {"
-        "      \"x\": { \"field\": \"x\" }, \"y\": { \"field\": \"y\" }"
-        "    }}"
-        "  ]"
+        "  \"layers\": [{ \"mark\": \"point\" }]"
         "}";
 
     Spec spec;
     assert(write_and_parse(json, &spec) == 0);
     assert(spec.basemap == BASEMAP_NONE);
+    spec_free(&spec);
     printf("  PASS: none basemap\n");
 }
 
-static void test_default_color_scheme(void) {
+static void test_default_scheme(void) {
     const char *json =
         "{"
-        "  \"data\": { \"uri\": \"x.csv\" },"
-        "  \"layers\": ["
-        "    { \"mark\": \"point\", \"encoding\": {"
-        "      \"x\": { \"field\": \"x\" }, \"y\": { \"field\": \"y\" },"
-        "      \"color\": { \"field\": \"val\" }"
-        "    }}"
-        "  ]"
+        "  \"sql\": \"SELECT 1 AS x, 2 AS y, 3 AS color\","
+        "  \"layers\": [{ \"mark\": \"point\" }]"
         "}";
 
     Spec spec;
     assert(write_and_parse(json, &spec) == 0);
-    assert(spec.layers[0].encoding.has_color == true);
-    assert(spec.layers[0].encoding.color_scheme == COLORMAP_VIRIDIS); /* default */
-    printf("  PASS: default color scheme\n");
+    assert(spec.layers[0].scheme == COLORMAP_VIRIDIS); /* default */
+    spec_free(&spec);
+    printf("  PASS: default scheme\n");
 }
 
-static void test_missing_data(void) {
-    const char *json = "{ \"layers\": [{ \"mark\": \"point\", \"encoding\": {"
-                       "\"x\":{\"field\":\"x\"}, \"y\":{\"field\":\"y\"}}}] }";
+static void test_parse_string(void) {
+    const char *json =
+        "{"
+        "  \"sql\": \"SELECT x, y FROM data\","
+        "  \"layers\": [{ \"mark\": \"line\" }]"
+        "}";
+
+    Spec spec;
+    assert(spec_parse_string(json, &spec) == 0);
+    assert(strcmp(spec.sql, "SELECT x, y FROM data") == 0);
+    assert(spec.layers[0].mark == MARK_LINE);
+    spec_free(&spec);
+    printf("  PASS: parse from string\n");
+}
+
+static void test_missing_sql(void) {
+    const char *json = "{ \"layers\": [{ \"mark\": \"point\" }] }";
     Spec spec;
     assert(write_and_parse(json, &spec) != 0);
-    printf("  PASS: missing data rejected\n");
+    printf("  PASS: missing sql rejected\n");
 }
 
 static void test_missing_layers(void) {
-    const char *json = "{ \"data\": { \"uri\": \"x.csv\" } }";
+    const char *json = "{ \"sql\": \"SELECT 1 AS x, 2 AS y\" }";
     Spec spec;
     assert(write_and_parse(json, &spec) != 0);
     printf("  PASS: missing layers rejected\n");
 }
 
-static void test_missing_encoding(void) {
+static void test_missing_mark(void) {
     const char *json =
-        "{ \"data\": { \"uri\": \"x.csv\" },"
-        "  \"layers\": [{ \"mark\": \"point\" }] }";
+        "{ \"sql\": \"SELECT 1 AS x, 2 AS y\","
+        "  \"layers\": [{}] }";
     Spec spec;
     assert(write_and_parse(json, &spec) != 0);
-    printf("  PASS: missing encoding rejected\n");
+    printf("  PASS: missing mark rejected\n");
 }
 
 static void test_invalid_json(void) {
@@ -179,10 +161,11 @@ int main(void) {
     test_full_spec();
     test_nautical_basemap();
     test_none_basemap();
-    test_default_color_scheme();
-    test_missing_data();
+    test_default_scheme();
+    test_parse_string();
+    test_missing_sql();
     test_missing_layers();
-    test_missing_encoding();
+    test_missing_mark();
     test_invalid_json();
     test_missing_file();
     printf("All spec tests passed.\n");

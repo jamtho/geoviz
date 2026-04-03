@@ -94,11 +94,11 @@ void render_rasterise(const Spec *spec, const DataSet *ds,
 
     for (int li = 0; li < spec->layer_count; li++) {
         const Layer *layer = &spec->layers[li];
-        ColormapType cmap = layer->encoding.color_scheme;
-        bool has_color = layer->encoding.has_color && ds->color_values != NULL;
+        ColormapType cmap = layer->scheme;
+        bool has_color = ds->has_color && ds->color_values != NULL;
 
         if (layer->mark == MARK_POINT) {
-            int pt_size = layer->encoding.point_size;
+            int pt_size = layer->point_size;
             for (uint32_t i = 0; i < ds->count; i++) {
                 int px = (int)lon_to_pixel(ds->x[i], vp, width);
                 int py = (int)lat_to_pixel(ds->y[i], vp, height);

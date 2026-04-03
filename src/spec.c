@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include "spec.h"
 #include "../third_party/cjson/cJSON.h"
 #include <stdio.h>
@@ -39,42 +40,33 @@ static MarkType parse_mark(const char *s) {
     return MARK_POINT;
 }
 
-int spec_parse(const char *filepath, Spec *out) {
-    char *buf = NULL;
-    if (read_file(filepath, &buf) != 0) return -1;
-
-    cJSON *root = cJSON_Parse(buf);
-    free(buf);
+int spec_parse_string(const char *json, Spec *out) {
+    cJSON *root = cJSON_Parse(json);
     if (!root) {
-        fprintf(stderr, "Error: invalid JSON in spec file\n");
+        fprintf(stderr, "Error: invalid JSON in spec\n");
         return -1;
     }
 
     memset(out, 0, sizeof(Spec));
 
-    /* data.uri */
-    cJSON *data = cJSON_GetObjectItemCaseSensitive(root, "data");
-    if (!data || !cJSON_IsObject(data)) {
-        fprintf(stderr, "Error: missing 'data' object in spec\n");
+    /* sql (required) */
+    cJSON *sql = cJSON_GetObjectItemCaseSensitive(root, "sql");
+    if (!sql || !cJSON_IsString(sql)) {
+        fprintf(stderr, "Error: missing 'sql' string in spec\n");
         cJSON_Delete(root);
         return -1;
     }
-    cJSON *uri = cJSON_GetObjectItemCaseSensitive(data, "uri");
-    if (!uri || !cJSON_IsString(uri)) {
-        fprintf(stderr, "Error: missing 'data.uri' string in spec\n");
-        cJSON_Delete(root);
-        return -1;
-    }
-    strncpy(out->data_uri, uri->valuestring, sizeof(out->data_uri) - 1);
+    out->sql = strdup(sql->valuestring);
 
     /* basemap */
     cJSON *basemap = cJSON_GetObjectItemCaseSensitive(root, "basemap");
     out->basemap = parse_basemap(basemap && cJSON_IsString(basemap) ? basemap->valuestring : NULL);
 
-    /* layers */
+    /* layers (required) */
     cJSON *layers = cJSON_GetObjectItemCaseSensitive(root, "layers");
     if (!layers || !cJSON_IsArray(layers)) {
         fprintf(stderr, "Error: missing 'layers' array in spec\n");
+        spec_free(out);
         cJSON_Delete(root);
         return -1;
     }
@@ -93,54 +85,35 @@ int spec_parse(const char *filepath, Spec *out) {
         cJSON *mark = cJSON_GetObjectItemCaseSensitive(layer, "mark");
         if (!mark || !cJSON_IsString(mark)) {
             fprintf(stderr, "Error: layer %d missing 'mark'\n", i);
+            spec_free(out);
             cJSON_Delete(root);
             return -1;
         }
         l->mark = parse_mark(mark->valuestring);
 
-        cJSON *enc = cJSON_GetObjectItemCaseSensitive(layer, "encoding");
-        if (!enc || !cJSON_IsObject(enc)) {
-            fprintf(stderr, "Error: layer %d missing 'encoding'\n", i);
-            cJSON_Delete(root);
-            return -1;
-        }
-
-        cJSON *x = cJSON_GetObjectItemCaseSensitive(enc, "x");
-        cJSON *y = cJSON_GetObjectItemCaseSensitive(enc, "y");
-        if (!x || !y) {
-            fprintf(stderr, "Error: layer %d missing x or y encoding\n", i);
-            cJSON_Delete(root);
-            return -1;
-        }
-
-        cJSON *x_field = cJSON_GetObjectItemCaseSensitive(x, "field");
-        cJSON *y_field = cJSON_GetObjectItemCaseSensitive(y, "field");
-        if (!x_field || !cJSON_IsString(x_field) || !y_field || !cJSON_IsString(y_field)) {
-            fprintf(stderr, "Error: layer %d x/y encoding missing 'field'\n", i);
-            cJSON_Delete(root);
-            return -1;
-        }
-
-        strncpy(l->encoding.x_field, x_field->valuestring, sizeof(l->encoding.x_field) - 1);
-        strncpy(l->encoding.y_field, y_field->valuestring, sizeof(l->encoding.y_field) - 1);
+        /* scheme (optional, default viridis) */
+        cJSON *scheme = cJSON_GetObjectItemCaseSensitive(layer, "scheme");
+        l->scheme = colormap_from_name(
+            scheme && cJSON_IsString(scheme) ? scheme->valuestring : NULL);
 
         /* point_size (optional, default 6) */
-        cJSON *ps = cJSON_GetObjectItemCaseSensitive(enc, "point_size");
-        l->encoding.point_size = (ps && cJSON_IsNumber(ps) && ps->valueint > 0) ? ps->valueint : 6;
-
-        cJSON *color = cJSON_GetObjectItemCaseSensitive(enc, "color");
-        if (color && cJSON_IsObject(color)) {
-            cJSON *cf = cJSON_GetObjectItemCaseSensitive(color, "field");
-            if (cf && cJSON_IsString(cf)) {
-                l->encoding.has_color = true;
-                strncpy(l->encoding.color_field, cf->valuestring, sizeof(l->encoding.color_field) - 1);
-                cJSON *scheme = cJSON_GetObjectItemCaseSensitive(color, "scheme");
-                l->encoding.color_scheme = colormap_from_name(
-                    scheme && cJSON_IsString(scheme) ? scheme->valuestring : NULL);
-            }
-        }
+        cJSON *ps = cJSON_GetObjectItemCaseSensitive(layer, "point_size");
+        l->point_size = (ps && cJSON_IsNumber(ps) && ps->valueint > 0) ? ps->valueint : 6;
     }
 
     cJSON_Delete(root);
     return 0;
+}
+
+int spec_parse(const char *filepath, Spec *out) {
+    char *buf = NULL;
+    if (read_file(filepath, &buf) != 0) return -1;
+    int result = spec_parse_string(buf, out);
+    free(buf);
+    return result;
+}
+
+void spec_free(Spec *spec) {
+    free(spec->sql);
+    spec->sql = NULL;
 }
