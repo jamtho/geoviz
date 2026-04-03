@@ -183,12 +183,12 @@ int data_load(const char *sql, DataSet *out) {
     }
 
     /* Find columns by name */
-    int x_col = find_column(&result, "x");
-    int y_col = find_column(&result, "y");
+    int x_col = find_column(&result, "lon");
+    int y_col = find_column(&result, "lat");
     int color_col = find_column(&result, "color");
 
     if (x_col < 0 || y_col < 0) {
-        fprintf(stderr, "Error: query result must have columns named 'x' and 'y'\n");
+        fprintf(stderr, "Error: query result must have columns named 'lon' and 'lat'\n");
         duckdb_destroy_result(&result);
         duckdb_disconnect(&con);
         duckdb_close(&db);
@@ -197,14 +197,14 @@ int data_load(const char *sql, DataSet *out) {
 
     /* Validate column types */
     if (!is_numeric_type(duckdb_column_type(&result, x_col))) {
-        fprintf(stderr, "Error: column 'x' is not numeric\n");
+        fprintf(stderr, "Error: column 'lon' is not numeric\n");
         duckdb_destroy_result(&result);
         duckdb_disconnect(&con);
         duckdb_close(&db);
         return -1;
     }
     if (!is_numeric_type(duckdb_column_type(&result, y_col))) {
-        fprintf(stderr, "Error: column 'y' is not numeric\n");
+        fprintf(stderr, "Error: column 'lat' is not numeric\n");
         duckdb_destroy_result(&result);
         duckdb_disconnect(&con);
         duckdb_close(&db);

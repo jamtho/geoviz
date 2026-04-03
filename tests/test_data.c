@@ -23,14 +23,14 @@ static int file_exists(const char *path) {
 static void test_load_csv_basic(void) {
     const char *csv = "test_load_basic.csv";
     write_csv(csv,
-        "x,y,color\n"
+        "lon,lat,color\n"
         "1.0,50.0,5.0\n"
         "2.0,51.0,10.0\n"
         "-1.5,49.5,15.0\n"
     );
 
     DataSet ds;
-    int rc = data_load("SELECT x, y, color FROM read_csv('test_load_basic.csv')", &ds);
+    int rc = data_load("SELECT lon, lat, color FROM read_csv('test_load_basic.csv')", &ds);
     assert(rc == 0);
     assert(ds.count == 3);
     assert(ds.has_color == true);
@@ -54,13 +54,13 @@ static void test_load_csv_basic(void) {
 static void test_load_csv_no_color(void) {
     const char *csv = "test_load_no_color.csv";
     write_csv(csv,
-        "x,y\n"
+        "lon,lat\n"
         "10.0,20.0\n"
         "30.0,40.0\n"
     );
 
     DataSet ds;
-    int rc = data_load("SELECT x, y FROM read_csv('test_load_no_color.csv')", &ds);
+    int rc = data_load("SELECT lon, lat FROM read_csv('test_load_no_color.csv')", &ds);
     assert(rc == 0);
     assert(ds.count == 2);
     assert(ds.has_color == false);
@@ -76,13 +76,13 @@ static void test_load_csv_no_color(void) {
 static void test_load_csv_with_alias(void) {
     const char *csv = "test_load_alias.csv";
     write_csv(csv,
-        "lon,lat,speed\n"
+        "longitude,latitude,speed\n"
         "1.0,50.0,5.0\n"
         "2.0,51.0,10.0\n"
     );
 
     DataSet ds;
-    int rc = data_load("SELECT lon AS x, lat AS y, speed AS color FROM read_csv('test_load_alias.csv')", &ds);
+    int rc = data_load("SELECT longitude AS lon, latitude AS lat, speed AS color FROM read_csv('test_load_alias.csv')", &ds);
     assert(rc == 0);
     assert(ds.count == 2);
     assert(ds.has_color == true);
@@ -98,12 +98,12 @@ static void test_load_csv_with_alias(void) {
 static void test_load_csv_single_row(void) {
     const char *csv = "test_load_single.csv";
     write_csv(csv,
-        "x,y\n"
+        "lon,lat\n"
         "5.5,55.5\n"
     );
 
     DataSet ds;
-    int rc = data_load("SELECT x, y FROM read_csv('test_load_single.csv')", &ds);
+    int rc = data_load("SELECT lon, lat FROM read_csv('test_load_single.csv')", &ds);
     assert(rc == 0);
     assert(ds.count == 1);
     ASSERT_NEAR(ds.x[0], 5.5f, 0.01);
@@ -117,13 +117,13 @@ static void test_load_csv_single_row(void) {
 static void test_load_csv_integer_columns(void) {
     const char *csv = "test_load_int.csv";
     write_csv(csv,
-        "x,y,color\n"
+        "lon,lat,color\n"
         "1,2,100\n"
         "3,4,200\n"
     );
 
     DataSet ds;
-    int rc = data_load("SELECT x, y, color FROM read_csv('test_load_int.csv')", &ds);
+    int rc = data_load("SELECT lon, lat, color FROM read_csv('test_load_int.csv')", &ds);
     assert(rc == 0);
     assert(ds.count == 2);
     ASSERT_NEAR(ds.x[0], 1.0f, 0.01);
@@ -138,7 +138,7 @@ static void test_load_csv_large(void) {
     const char *csv = "test_load_large.csv";
     FILE *f = fopen(csv, "w");
     assert(f);
-    fprintf(f, "x,y,color\n");
+    fprintf(f, "lon,lat,color\n");
     for (int i = 0; i < 10000; i++) {
         fprintf(f, "%.4f,%.4f,%.2f\n",
                 -5.0 + (i % 100) * 0.07,
@@ -148,7 +148,7 @@ static void test_load_csv_large(void) {
     fclose(f);
 
     DataSet ds;
-    int rc = data_load("SELECT x, y, color FROM read_csv('test_load_large.csv')", &ds);
+    int rc = data_load("SELECT lon, lat, color FROM read_csv('test_load_large.csv')", &ds);
     assert(rc == 0);
     assert(ds.count == 10000);
     assert(ds.x_min < ds.x_max);
@@ -167,7 +167,7 @@ static void test_load_parquet(void) {
     }
 
     DataSet ds;
-    int rc = data_load("SELECT lon AS x, lat AS y, speed AS color FROM read_parquet('tests/fixture.parquet')", &ds);
+    int rc = data_load("SELECT lon, lat, speed AS color FROM read_parquet('tests/fixture.parquet')", &ds);
     assert(rc == 0);
     assert(ds.count == 4);
     ASSERT_NEAR(ds.x_min, -3.0f, 0.01);
@@ -183,7 +183,7 @@ static void test_load_parquet(void) {
 
 static void test_load_inline_sql(void) {
     DataSet ds;
-    int rc = data_load("SELECT 1.5 AS x, 51.0 AS y, 42.0 AS color", &ds);
+    int rc = data_load("SELECT 1.5 AS lon, 51.0 AS lat, 42.0 AS color", &ds);
     assert(rc == 0);
     assert(ds.count == 1);
     assert(ds.has_color == true);
@@ -206,19 +206,19 @@ static void test_load_missing_xy(void) {
     DataSet ds;
     int rc = data_load("SELECT 1 AS a, 2 AS b", &ds);
     assert(rc != 0);
-    printf("  PASS: missing x/y columns fails\n");
+    printf("  PASS: missing lon/lat columns fails\n");
 }
 
 static void test_load_negative_values(void) {
     const char *csv = "test_load_neg.csv";
     write_csv(csv,
-        "x,y,color\n"
+        "lon,lat,color\n"
         "-180.0,-90.0,-40.5\n"
         "180.0,90.0,50.0\n"
     );
 
     DataSet ds;
-    int rc = data_load("SELECT x, y, color FROM read_csv('test_load_neg.csv')", &ds);
+    int rc = data_load("SELECT lon, lat, color FROM read_csv('test_load_neg.csv')", &ds);
     assert(rc == 0);
     assert(ds.count == 2);
     ASSERT_NEAR(ds.x_min, -180.0f, 0.1);
@@ -234,7 +234,7 @@ static void test_load_negative_values(void) {
 static void test_load_uniform_color(void) {
     DataSet ds;
     int rc = data_load(
-        "SELECT x, y, 7.0 AS color FROM (VALUES (1.0, 2.0), (3.0, 4.0), (5.0, 6.0)) AS t(x, y)",
+        "SELECT lon, lat, 7.0 AS color FROM (VALUES (1.0, 2.0), (3.0, 4.0), (5.0, 6.0)) AS t(lon, lat)",
         &ds);
     assert(rc == 0);
     assert(ds.count == 3);

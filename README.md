@@ -18,7 +18,7 @@ geoviz spec.json --screenshot output.png
 # Compute and visualise in one step — no intermediate files needed
 cat <<'EOF' | geoviz
 {
-  "sql": "SELECT lon AS x, lat AS y, speed AS color FROM read_parquet('traffic.parquet') WHERE speed > 5",
+  "sql": "SELECT lon, lat, speed AS color FROM read_parquet('traffic.parquet') WHERE speed > 5",
   "basemap": "osm",
   "layers": [{ "mark": "point", "scheme": "turbo" }]
 }
@@ -27,7 +27,7 @@ EOF
 # Query S3-compatible storage directly
 cat <<'EOF' | geoviz
 {
-  "sql": "SELECT lon AS x, lat AS y, sog AS color FROM read_parquet('s3://bucket/tracks.parquet')",
+  "sql": "SELECT lon, lat, sog AS color FROM read_parquet('s3://bucket/tracks.parquet')",
   "basemap": "nautical",
   "layers": [{ "mark": "line", "scheme": "viridis" }]
 }
@@ -38,7 +38,7 @@ EOF
 
 ```json
 {
-  "sql": "SELECT lon AS x, lat AS y, speed AS color FROM read_parquet('data.parquet')",
+  "sql": "SELECT lon, lat, speed AS color FROM read_parquet('data.parquet')",
   "basemap": "osm",
   "layers": [
     { "mark": "point", "scheme": "turbo", "point_size": 6 }
@@ -46,7 +46,7 @@ EOF
 }
 ```
 
-- **sql**: Any DuckDB SQL query. Must produce columns named `x` and `y`. An optional `color` column controls per-point coloring.
+- **sql**: Any DuckDB SQL query. Must produce columns named `lon` and `lat`. An optional `color` column controls per-point coloring.
 - **basemap**: `"osm"`, `"satellite"`, `"nautical"`, or `"none"`
 - **mark**: `"point"` (filled square per row) or `"line"` (Bresenham between consecutive rows)
 - **scheme**: `"viridis"`, `"inferno"`, `"plasma"`, or `"turbo"`

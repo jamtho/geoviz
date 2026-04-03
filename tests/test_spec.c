@@ -18,7 +18,7 @@ static int write_and_parse(const char *json, Spec *out) {
 static void test_minimal_spec(void) {
     const char *json =
         "{"
-        "  \"sql\": \"SELECT lon AS x, lat AS y FROM read_parquet('test.parquet')\","
+        "  \"sql\": \"SELECT lon, lat FROM read_parquet('test.parquet')\","
         "  \"layers\": ["
         "    { \"mark\": \"point\" }"
         "  ]"
@@ -26,7 +26,7 @@ static void test_minimal_spec(void) {
 
     Spec spec;
     assert(write_and_parse(json, &spec) == 0);
-    assert(strcmp(spec.sql, "SELECT lon AS x, lat AS y FROM read_parquet('test.parquet')") == 0);
+    assert(strcmp(spec.sql, "SELECT lon, lat FROM read_parquet('test.parquet')") == 0);
     assert(spec.basemap == BASEMAP_OSM); /* default */
     assert(spec.layer_count == 1);
     assert(spec.layers[0].mark == MARK_POINT);
@@ -39,7 +39,7 @@ static void test_minimal_spec(void) {
 static void test_full_spec(void) {
     const char *json =
         "{"
-        "  \"sql\": \"SELECT longitude AS x, latitude AS y, speed AS color FROM read_parquet('s3://bucket/data.parquet')\","
+        "  \"sql\": \"SELECT longitude AS lon, latitude AS lat, speed AS color FROM read_parquet('s3://bucket/data.parquet')\","
         "  \"basemap\": \"satellite\","
         "  \"layers\": ["
         "    { \"mark\": \"line\", \"scheme\": \"turbo\" },"
@@ -64,7 +64,7 @@ static void test_full_spec(void) {
 static void test_nautical_basemap(void) {
     const char *json =
         "{"
-        "  \"sql\": \"SELECT 1 AS x, 2 AS y\","
+        "  \"sql\": \"SELECT 1 AS lon, 2 AS lat\","
         "  \"basemap\": \"nautical\","
         "  \"layers\": [{ \"mark\": \"point\" }]"
         "}";
@@ -79,7 +79,7 @@ static void test_nautical_basemap(void) {
 static void test_none_basemap(void) {
     const char *json =
         "{"
-        "  \"sql\": \"SELECT 1 AS x, 2 AS y\","
+        "  \"sql\": \"SELECT 1 AS lon, 2 AS lat\","
         "  \"basemap\": \"none\","
         "  \"layers\": [{ \"mark\": \"point\" }]"
         "}";
@@ -94,7 +94,7 @@ static void test_none_basemap(void) {
 static void test_default_scheme(void) {
     const char *json =
         "{"
-        "  \"sql\": \"SELECT 1 AS x, 2 AS y, 3 AS color\","
+        "  \"sql\": \"SELECT 1 AS lon, 2 AS lat, 3 AS color\","
         "  \"layers\": [{ \"mark\": \"point\" }]"
         "}";
 
@@ -108,13 +108,13 @@ static void test_default_scheme(void) {
 static void test_parse_string(void) {
     const char *json =
         "{"
-        "  \"sql\": \"SELECT x, y FROM data\","
+        "  \"sql\": \"SELECT lon, lat FROM data\","
         "  \"layers\": [{ \"mark\": \"line\" }]"
         "}";
 
     Spec spec;
     assert(spec_parse_string(json, &spec) == 0);
-    assert(strcmp(spec.sql, "SELECT x, y FROM data") == 0);
+    assert(strcmp(spec.sql, "SELECT lon, lat FROM data") == 0);
     assert(spec.layers[0].mark == MARK_LINE);
     spec_free(&spec);
     printf("  PASS: parse from string\n");
@@ -128,7 +128,7 @@ static void test_missing_sql(void) {
 }
 
 static void test_missing_layers(void) {
-    const char *json = "{ \"sql\": \"SELECT 1 AS x, 2 AS y\" }";
+    const char *json = "{ \"sql\": \"SELECT 1 AS lon, 2 AS lat\" }";
     Spec spec;
     assert(write_and_parse(json, &spec) != 0);
     printf("  PASS: missing layers rejected\n");
@@ -136,7 +136,7 @@ static void test_missing_layers(void) {
 
 static void test_missing_mark(void) {
     const char *json =
-        "{ \"sql\": \"SELECT 1 AS x, 2 AS y\","
+        "{ \"sql\": \"SELECT 1 AS lon, 2 AS lat\","
         "  \"layers\": [{}] }";
     Spec spec;
     assert(write_and_parse(json, &spec) != 0);

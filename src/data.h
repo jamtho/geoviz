@@ -15,7 +15,7 @@ typedef struct {
     bool has_color;
 } DataSet;
 
-/* Execute SQL via DuckDB and load results. Expects columns named x, y,
+/* Execute SQL via DuckDB and load results. Expects columns named lon, lat,
    and optionally color. Returns 0 on success. */
 int data_load(const char *sql, DataSet *out);
 

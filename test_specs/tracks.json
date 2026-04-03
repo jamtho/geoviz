@@ -1,5 +1,5 @@
 {
-  "sql": "SELECT lon AS x, lat AS y, sog AS color FROM read_parquet('vessel_tracks.parquet')",
+  "sql": "SELECT lon, lat, sog AS color FROM read_parquet('vessel_tracks.parquet')",
   "basemap": "satellite",
   "layers": [
     { "mark": "line", "scheme": "viridis" }
