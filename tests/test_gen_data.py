@@ -113,7 +113,7 @@ class TestSpecFiles:
         import json
 
         data = json.loads((spec_dir / "points.json").read_text())
-        assert "data" in data
+        assert "sql" in data
         assert "layers" in data
         assert data["layers"][0]["mark"] == "point"
 
@@ -121,6 +121,7 @@ class TestSpecFiles:
         import json
 
         data = json.loads((spec_dir / "tracks.json").read_text())
+        assert "sql" in data
         assert data["basemap"] == "satellite"
         assert data["layers"][0]["mark"] == "line"
 
@@ -128,5 +129,6 @@ class TestSpecFiles:
         import json
 
         data = json.loads((spec_dir / "nautical.json").read_text())
+        assert "sql" in data
         assert data["basemap"] == "nautical"
         assert len(data["layers"]) == 2
