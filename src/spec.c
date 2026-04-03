@@ -1,9 +1,15 @@
-#define _POSIX_C_SOURCE 200809L
 #include "spec.h"
 #include "../third_party/cjson/cJSON.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static char *str_dup(const char *s) {
+    size_t len = strlen(s) + 1;
+    char *copy = (char *)malloc(len);
+    if (copy) memcpy(copy, s, len);
+    return copy;
+}
 
 static int read_file(const char *path, char **out_buf) {
     FILE *f = fopen(path, "rb");
@@ -56,7 +62,7 @@ int spec_parse_string(const char *json, Spec *out) {
         cJSON_Delete(root);
         return -1;
     }
-    out->sql = strdup(sql->valuestring);
+    out->sql = str_dup(sql->valuestring);
 
     /* basemap */
     cJSON *basemap = cJSON_GetObjectItemCaseSensitive(root, "basemap");
