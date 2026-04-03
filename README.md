@@ -4,6 +4,39 @@ Native, high-performance geospatial data visualization. Renders large-scale (10M
 
 Single statically-linked binary. Built with DuckDB (data loading), raylib (rendering), and cJSON (spec parsing).
 
+Designed primarily as a tool for AI agents doing data analysis — an agent writes a small JSON spec and calls `geoviz` to get an interactive map visualization without needing a browser, notebook, or Python plotting stack.
+
+## Examples
+
+```bash
+# Visualise points colored by speed on an OSM basemap
+geoviz spec.json
+
+# Where spec.json contains:
+# {
+#   "data": { "uri": "traffic.parquet" },
+#   "basemap": "osm",
+#   "layers": [{
+#     "mark": "point",
+#     "encoding": {
+#       "x": { "field": "lon" },
+#       "y": { "field": "lat" },
+#       "color": { "field": "speed", "scheme": "turbo" }
+#     }
+#   }]
+# }
+
+# Draw vessel tracks as lines on a nautical chart
+geoviz nautical_tracks.json
+
+# Load data directly from S3-compatible storage (via DuckDB)
+# Just set the data.uri in your spec to an s3:// path:
+# { "data": { "uri": "s3://enron-emails/geo/locations.parquet" }, ... }
+
+# Save a screenshot instead of staying interactive
+geoviz spec.json --screenshot output.png
+```
+
 ## Quick start
 
 ```bash
