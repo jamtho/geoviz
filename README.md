@@ -12,9 +12,6 @@ Designed primarily as a tool for AI agents doing data analysis — an agent writ
 # Visualise points from a parquet file
 geoviz spec.json
 
-# Pipe spec from stdin (useful for agents)
-echo '{"sql":"SELECT lon AS x, lat AS y FROM read_parquet(\"data.parquet\")","basemap":"osm","layers":[{"mark":"point"}]}' | geoviz
-
 # Save a screenshot
 geoviz spec.json --screenshot output.png
 
