@@ -4,7 +4,7 @@ Native, high-performance geospatial data visualization. Renders large-scale (10M
 
 Single statically-linked binary. Built with DuckDB (data loading + computation), raylib (rendering), and cJSON (spec parsing).
 
-Designed primarily as a tool for AI agents doing data analysis — an agent writes a small JSON spec and calls `geoviz` to get an interactive map visualization without needing a browser, notebook, or Python plotting stack.
+Designed primarily as a tool for AI agents helping users with data analysis — an agent writes a small JSON spec and calls `geoviz` to get an interactive map visualization without needing a browser, notebook, or Python plotting stack.
 
 ## Examples
 
