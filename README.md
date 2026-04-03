@@ -82,8 +82,9 @@ cmake --build build --config Release
 # Generate test data
 uv run python scripts/gen_test_data.py
 
-# Run
-build/Release/geoviz test_specs/points.json
+# Run (binary location depends on platform)
+build/geoviz test_specs/points.json            # macOS / Linux
+build/Release/geoviz test_specs/points.json    # Windows (Visual Studio)
 ```
 
 ## Tests
